@@ -1,0 +1,29 @@
+@import "tailwindcss";
+
+@plugin "daisyui" {
+    themes: light --default;
+}
+
+@layer components {
+    .color-1 {
+        background-color: #F6F5F5 !important;
+    }
+
+    .color-2 {
+        background-color: #EE6F57 !important;
+    }
+
+    .color-3 {
+        background-color: #1F3C88 !important;
+    }
+
+    .color-4 {
+        background-color: #070D59 !important;
+    }
+
+
+    .nav-btn {
+        background-color: #f6f6f6 !important;
+        color: black;
+    }
+}
