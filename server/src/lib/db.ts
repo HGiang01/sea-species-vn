@@ -33,4 +33,5 @@ export const conn = async (): Promise<boolean> => {
 // Disconnect client
 export const disconnect = async (): Promise<void> => {
     await client.end();
+    console.log("🐘 Disconnected from PostgreSQL");
 };
