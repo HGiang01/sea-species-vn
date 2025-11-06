@@ -4,7 +4,9 @@ import express from "express";
 import cors from "cors";
 
 import { conn } from "./lib/db.js";
+import authRoute from "./routes/auth.route.js";
 import { errorHandler } from "./middlewares/errorHandler.js";
+import { clearBlacklist } from "./utils/clearBlacklist.js";
 
 // Configs
 const PORT = process.env.PORT || 3000;
@@ -21,7 +23,11 @@ app.use(express.json());
 const isConnectedDB = await conn();
 
 // Routes
+app.use("/api/auth", authRoute);
 app.use(errorHandler);
+
+// Clear blacklist tokens at startup
+await clearBlacklist();
 
 // Start server
 isConnectedDB &&

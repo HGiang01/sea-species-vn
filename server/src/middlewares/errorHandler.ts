@@ -8,12 +8,12 @@ export const errorHandler = (
     res: Response,
     next: NextFunction
 ) => {
-    console.log("❌ Error: ", error);
+    console.error(error);
 
     if (error instanceof AppError) {
         return res.status(error.statusCode).json({
             status: "error",
-            message: error.message,
+            message: error.message.slice(error.message.indexOf("]") + 2),
         });
     }
 
