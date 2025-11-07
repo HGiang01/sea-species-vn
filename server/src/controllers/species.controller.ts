@@ -1,5 +1,6 @@
 import { type Request, type Response } from "express";
 import { type QueryResult } from "pg";
+import fs from "fs/promises";
 
 import { client } from "../lib/db.js";
 import { uploadImage, destroyImage } from "../lib/cloudinaryImageService.js";
@@ -316,7 +317,7 @@ export const updateSpecies = async (req: Request, res: Response) => {
     return res.status(200).json({ message: "Update species successfully", species: result.rows[0] });
 };
 
-export const deleteSpecies = async (req: Request, res: Response): Promise<Response> => {
+export const deleteSpecies = async (req: Request, res: Response) => {
     const { id } = req.params;
 
     await client.query({
@@ -331,3 +332,90 @@ export const deleteSpecies = async (req: Request, res: Response): Promise<Respon
 };
 
 // Controller for managing species images (admin only)
+export const uploadSpeciesImage = async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const image = req.file;
+
+    if (!image) {
+        throw new AppError("[species/uploadSpeciesImage] Image is required", 400);
+    }
+
+    // Upload image
+    const uploadRes = await uploadImage(image.path);
+    // Remove local image
+    await fs.rm(image.path);
+
+    if (!uploadRes.public_id || !uploadRes.secure_url) {
+        throw new AppError(`[species/uploadSpeciesImage] Failed to upload image (missing image url)`, 503);
+    }
+
+    const insertImageRes = await client.query({
+        text: `INSERT INTO ${IMAGE_TB}
+                   VALUES ($1, $2, $3) RETURNING *`,
+        values: [uploadRes.public_id, id, uploadRes.secure_url],
+    });
+
+    return res.status(201).json({
+        message: "Upload image successfully",
+        image: insertImageRes.rows[0],
+    });
+};
+
+export const selectCoverImage = async (req: Request, res: Response) => {
+    const { id: speciesId, imageId: publicId } = req.params;
+
+    if (!publicId) {
+        throw new Error("[species/selectCoverImage] Image id is required");
+    }
+
+    // Reset cover image
+    await client.query({
+        name: "reset-cover-image",
+        text: `UPDATE ${IMAGE_TB}
+                    SET is_cover = FALSE
+                    WHERE species_id = $1
+                    AND is_cover = TRUE`,
+        values: [speciesId],
+    });
+
+    // Set new cover image
+    await client.query({
+        name: "select-cover-image",
+        text: `UPDATE ${IMAGE_TB}
+                   SET is_cover = TRUE
+                   WHERE public_id = $1`,
+        values: [publicId],
+    });
+
+    return res.status(200).json({
+        message: "Select cover image successfully",
+    });
+};
+
+export const deleteSpeciesImage = async (req: Request, res: Response) => {
+    const { imageId: publicId } = req.params;
+
+    if (!publicId) {
+        throw new Error("[species/deleteSpeciesImage] Image id is required");
+    }
+
+    // Destroy image from cloudinary
+    const destroyRes = await destroyImage(publicId);
+
+    if (destroyRes.result !== "ok" && destroyRes.result !== "not found") {
+        throw new AppError(`[species/deleteSpeciesImage] Failed to destroy image: ${destroyRes.result}`, 503);
+    }
+
+    // Delete image record from database
+    await client.query({
+        name: "delete-image",
+        text: `DELETE
+                   FROM ${IMAGE_TB}
+                   WHERE public_id = $1 RETURNING *`,
+        values: [publicId],
+    });
+
+    return res.status(200).json({
+        message: "Destroy image successfully",
+    });
+};
