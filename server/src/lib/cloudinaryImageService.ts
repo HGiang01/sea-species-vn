@@ -1,9 +1,8 @@
-import type {UploadApiOptions, UploadApiResponse} from "cloudinary";
+import { type UploadApiOptions, type UploadApiResponse } from "cloudinary";
 import cloudinary from "../config/cloudinary.js";
 
 const uploadConfig: UploadApiOptions = {
     use_filename: true,
-    folder: process.env.CLOUDINARY_FOLDER || "ocean-species",
     overwrite: true,
     resource_type: "image",
 };
