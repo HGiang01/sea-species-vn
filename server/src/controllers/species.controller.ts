@@ -25,7 +25,7 @@ interface Species {
     group_species: string;
     description: string;
     characteristic: string;
-    habits: string;
+    habitas: string;
     impact: string;
     threatened_symbol: ThreatenedSymbol;
     vn_distribution: string;
@@ -40,6 +40,11 @@ interface Species {
     updated_at: Date;
 }
 
+interface SpeciesImage {
+    image_url: string;
+    is_cover: boolean;
+}
+
 const SPECIES_COLUMNS = [
     "id",
     "species",
@@ -47,7 +52,7 @@ const SPECIES_COLUMNS = [
     "group_species",
     "description",
     "characteristic",
-    "habits",
+    "habitas",
     "impact",
     "threatened_symbol",
     "vn_distribution",
@@ -81,31 +86,32 @@ export const getAllSpecies = async (req: Request, res: Response) => {
                 ORDER BY updated_at DESC`,
     });
 
-    return res.status(200).json({ message: "Get all species successfully", data: result.rows });
+    return res.status(200).json({ message: "Get all species successfully", species: result.rows });
 };
 
 export const getSpeciesById = async (req: Request, res: Response) => {
     const { id } = req.params;
 
-    const result: QueryResult<Species & { image_url: string }> = await client.query({
+    const result: QueryResult<Species & SpeciesImage> = await client.query({
         name: "get-species",
         text: `SELECT s.*,
-                i.image_url
+                i.image_url,
+                i.is_cover
                 FROM ${SPECIES_TB} AS s  
                 INNER JOIN ${IMAGE_TB} AS i 
                 ON s.id = i.species_id
-                WHERE s.id = $1 AND i.is_cover IS TRUE
+                WHERE s.id = $1 
                 ORDER BY updated_at DESC`,
         values: [id],
     });
 
     // Aggregate images into an array
-    const species = result.rows.reduce<(Species & { images: string[] }) | null>((acc, curr) => {
-        const { image_url, ...speciesData } = curr;
+    const species = result.rows.reduce<(Species & { images: SpeciesImage[] }) | null>((acc, curr) => {
+        const { image_url, is_cover, ...speciesData } = curr;
         if (!acc) {
-            return { ...speciesData, images: [image_url] };
+            return { ...speciesData, images: [{ image_url, is_cover }] };
         }
-        acc.images.push(image_url);
+        acc.images.push({ image_url, is_cover });
         return acc;
     }, null);
 
@@ -154,17 +160,7 @@ export const filterSpecies = async (req: Request, res: Response) => {
         values: values,
     });
 
-    // Aggregate images into an array
-    const species = result.rows.reduce<(Species & { images: string[] }) | null>((acc, curr) => {
-        const { image_url, ...speciesData } = curr;
-        if (!acc) {
-            return { ...speciesData, images: [image_url] };
-        }
-        acc.images.push(image_url);
-        return acc;
-    }, null);
-
-    return res.status(200).json({ message: "Filter species successfully", species });
+    return res.status(200).json({ message: "Filter species successfully", species: result.rows });
 };
 
 export const countTaxonomy = async (req: Request, res: Response) => {
@@ -204,17 +200,17 @@ export const countTaxonomy = async (req: Request, res: Response) => {
 
 // Controller for managing species (admin only)
 export const addSpecies = async (req: Request, res: Response) => {
-    const { name } = req.body;
+    const species = req.body?.species;
 
-    if (!name) {
-        throw new AppError("[species/addSpecies] Name field is required", 400);
+    if (!species) {
+        throw new AppError("[species/addSpecies] Species (name) field is required", 400);
     }
 
     // Check if species already exists
     const checkSpecies = await client.query({
         name: "check-species-exists",
-        text: `SELECT 1 FROM ${SPECIES_TB} WHERE name = $1`,
-        values: [name],
+        text: `SELECT 1 FROM ${SPECIES_TB} WHERE species = $1`,
+        values: [species],
     });
 
     if (checkSpecies.rowCount !== null && checkSpecies.rowCount > 0) {
@@ -255,10 +251,10 @@ export const addSpecies = async (req: Request, res: Response) => {
 
 export const updateSpecies = async (req: Request, res: Response) => {
     const { id } = req.params;
-    const { name } = req.body;
+    const species = req.body?.species;
 
-    if (!name) {
-        throw new AppError("[species/updateSpecies] Name field is required", 400);
+    if (!species) {
+        throw new AppError("[species/updateSpecies] Species (name) field is required", 400);
     }
 
     // Check if species exists
@@ -275,12 +271,12 @@ export const updateSpecies = async (req: Request, res: Response) => {
     // Check if name species already exists
     const checkSpecies = await client.query({
         name: "check-species-exists",
-        text: `SELECT 1 FROM ${SPECIES_TB} WHERE name = $1`,
-        values: [name],
+        text: `SELECT 1 FROM ${SPECIES_TB} WHERE species = $1`,
+        values: [species],
     });
 
     if (checkSpecies.rowCount !== null && checkSpecies.rowCount > 0) {
-        throw new AppError("[species/updateSpecies] Species already exists", 400);
+        throw new AppError("[species/updateSpecies] Species (name) already exists", 400);
     }
 
     // Create dynamic update query

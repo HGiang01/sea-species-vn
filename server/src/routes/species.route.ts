@@ -20,8 +20,8 @@ const router = Router();
 
 // Get species routes
 router.get("/", asyncHandler(getAllSpecies));
-router.get("/:id", asyncHandler(getSpeciesById));
 router.get("/filter", asyncHandler(filterSpecies));
+router.get("/:id", asyncHandler(getSpeciesById));
 router.get("/:id/taxonomy/count", asyncHandler(countTaxonomy));
 
 // Admin species routes
