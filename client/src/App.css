@@ -6,24 +6,34 @@
 
 @layer components {
     .color-1 {
-        background-color: #F6F5F5 !important;
+        background-color: #f6f5f5 !important;
     }
 
     .color-2 {
-        background-color: #EE6F57 !important;
+        background-color: #ee6f57 !important;
     }
 
     .color-3 {
-        background-color: #1F3C88 !important;
+        background-color: #1f3c88 !important;
     }
 
     .color-4 {
-        background-color: #070D59 !important;
+        background-color: #070d59 !important;
     }
-
 
     .nav-btn {
         background-color: #f6f6f6 !important;
         color: black;
+    }
+
+    .btn-color-3 {
+        background-color: #1f3c88 !important;
+        color: white !important;
+        border: none !important;
+        box-shadow: none !important;
+    }
+
+    .btn-color-3:hover {
+        background-color: #070d59 !important;
     }
 }
