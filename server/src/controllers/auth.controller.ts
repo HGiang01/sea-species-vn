@@ -18,7 +18,7 @@ const ADMIN_TB = process.env.PG_ADMIN_TB;
 const BLACKLIST_TB = process.env.PG_BLACKLIST_TB;
 
 export const login = async (req: Request, res: Response) => {
-    const { name, password } = req.body;
+    const { username, password } = req.body;
     let remainingAttempts: number | string | undefined = req.rateLimit?.remaining;
 
     if (remainingAttempts === 0) {
@@ -26,8 +26,8 @@ export const login = async (req: Request, res: Response) => {
     }
 
     // Checking required fields
-    if (!name || !password) {
-        throw new AppError("[auth/login] Both name and password fields are required", 400);
+    if (!username || !password) {
+        throw new AppError("[auth/login] Both username and password fields are required", 400);
     }
 
     // Get admin account
@@ -35,8 +35,8 @@ export const login = async (req: Request, res: Response) => {
         name: "getAdminAccount",
         text: `SELECT *
                FROM ${ADMIN_TB}
-               WHERE name = $1`,
-        values: [name],
+               WHERE username = $1`,
+        values: [username],
     });
 
     if (adminAccount.rowCount === 0) {
@@ -56,13 +56,13 @@ export const login = async (req: Request, res: Response) => {
     }
 
     // Generate token
-    const token = jwt.sign({ name }, process.env.JWT_SECRET as string, {
+    const token = jwt.sign({ username }, process.env.JWT_SECRET as string, {
         expiresIn: "1d",
     });
 
     return res.status(200).json({
         message: "Login successfully",
-        name,
+        username,
         token,
     });
 };
@@ -70,6 +70,11 @@ export const login = async (req: Request, res: Response) => {
 export const logout = async (req: Request, res: Response) => {
     // Get token from headers
     const authHeader = req.headers.authorization;
+
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ message: "Unauthorized: No token provided" });
+    }
+
     const token = authHeader!.split(" ")[1];
     const decoded = jwt.decode(token as string);
 
@@ -88,11 +93,11 @@ export const logout = async (req: Request, res: Response) => {
 };
 
 export const changePassword = async (req: Request, res: Response) => {
-    const { name, password, newPassword, confirmPassword } = req.body;
+    const { username, password, newPassword, confirmPassword } = req.body;
 
     // Checking required fields
-    if (!name || !password || !newPassword || !confirmPassword) {
-        throw new AppError("[auth/changePassword] Name, password, newPassword and confirmPassword fields are required", 400);
+    if (!username || !password || !newPassword || !confirmPassword) {
+        throw new AppError("[auth/changePassword] Username, password, newPassword and confirmPassword fields are required", 400);
     }
 
     if (newPassword.length < 8 || !/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(newPassword)) {
@@ -108,8 +113,8 @@ export const changePassword = async (req: Request, res: Response) => {
         name: "getAdminAccount",
         text: `SELECT *
                FROM ${ADMIN_TB}
-               WHERE name = $1`,
-        values: [name],
+               WHERE username = $1`,
+        values: [username],
     });
 
     if (adminAccount.rowCount === 0) {
@@ -127,24 +132,8 @@ export const changePassword = async (req: Request, res: Response) => {
     await client.query({
         text: `UPDATE ${ADMIN_TB}
                SET password = $1
-               WHERE name = $2`,
-        values: [hashed, name],
-    });
-
-    // Add to blacklist
-    // Get token from headers
-    const authHeader = req.headers.authorization;
-    const token = authHeader!.split(" ")[1];
-    const decoded = jwt.decode(token as string);
-
-    // Convert expiration (seconds) to datetime
-    const expSeconds = (decoded as { exp: number }).exp;
-    const expirationTime = new Date(expSeconds * 1000);
-
-    // Add token to blacklist
-    await client.query({
-        text: `INSERT INTO ${BLACKLIST_TB} VALUES ($1, $2)`,
-        values: [token, expirationTime],
+               WHERE username = $2`,
+        values: [hashed, username],
     });
 
     return res.status(200).json({

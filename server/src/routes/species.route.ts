@@ -29,8 +29,8 @@ router.post("/", protectRoute, asyncHandler(addSpecies));
 router.put("/:id", protectRoute, asyncHandler(updateSpecies));
 router.delete("/:id", protectRoute, asyncHandler(deleteSpecies));
 
-// Admin images routes
 router.post("/:id/image", protectRoute, uploadMemory.single("image"), asyncHandler(uploadSpeciesImage));
+// Admin images routes
 router.post("/:id/image/:imageId/cover", protectRoute, asyncHandler(selectCoverImage));
 router.delete("/:id/image/:imageId", protectRoute, asyncHandler(deleteSpeciesImage));
 

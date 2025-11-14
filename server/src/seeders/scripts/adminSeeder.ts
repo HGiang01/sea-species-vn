@@ -10,8 +10,8 @@ export const adminSeeder = {
         const existingAdmin = await client.query({
             text: `SELECT 1
                    FROM ${ADMIN_DB}
-                   WHERE name = $1`,
-            values: [adminData.name]
+                   WHERE username = $1`,
+            values: [adminData.username]
         })
 
         if (existingAdmin.rowCount === 1) {
@@ -23,7 +23,7 @@ export const adminSeeder = {
         await client.query({
             text: `INSERT INTO ${ADMIN_DB}
                    VALUES ($1, $2)`,
-            values: [adminData.name, hashed]
+            values: [adminData.username, hashed]
         })
 
         console.log("Admin account created");
@@ -33,8 +33,8 @@ export const adminSeeder = {
         await client.query({
             text: `DELETE
                    FROM ${ADMIN_DB}
-                   WHERE name = $1`,
-            values: [adminData.name]
+                   WHERE username = $1`,
+            values: [adminData.username]
         });
 
         console.log("Admin account deleted");
