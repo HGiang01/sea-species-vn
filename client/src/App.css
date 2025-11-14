@@ -4,6 +4,11 @@
     themes: light --default;
 }
 
+body {
+    @apply font-sans;
+    font-family: "Archivo", theme("fontFamily.sans");
+}
+
 @layer components {
     .color-1 {
         background-color: #f6f5f5 !important;

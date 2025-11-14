@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+
 import backgroundImage from "../assets/intro-background.png";
 
 function IntroPage() {
@@ -17,9 +19,9 @@ function IntroPage() {
                             Nơi chia sẻ kiến thức về các sinh vật biển ở Việt Nam: cung cấp dữ liệu, tài liệu về đa dạng sinh học biển, bảo
                             tồn biển và cách ứng xử hài hòa với biển
                         </p>
-                        <a href="/home" className="btn btn-info text-white">
+                        <Link to="/home" className="btn btn-info animate-bounce text-white">
                             Khám phá ngay
-                        </a>
+                        </Link>
                     </div>
                 </div>
             </div>
