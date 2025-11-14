@@ -5,7 +5,8 @@ import cors from "cors";
 
 import { conn } from "./lib/db.js";
 import authRoute from "./routes/auth.route.js";
-import speciesRoute from "./routes/species.route.js";
+import speciesRouter from "./routes/species.route.js";
+import pointRouter from "./routes/point.route.js";
 import { errorHandler } from "./middlewares/errorHandler.js";
 import { clearBlacklist } from "./utils/clearBlacklist.js";
 
@@ -25,7 +26,8 @@ const isConnectedDB = await conn();
 
 // Routes
 app.use("/api/auth", authRoute);
-app.use("/api/species", speciesRoute);
+app.use("/api/species", speciesRouter);
+app.use("/api/points", pointRouter);
 app.use(errorHandler);
 
 // Clear blacklist tokens at startup
