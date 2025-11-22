@@ -4,34 +4,34 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { protectRoute } from "../middlewares/protectRoute.js";
 import { uploadMemory } from "../config/multer.js";
 import {
-    getAllSpecies,
-    getSpeciesById,
-    filterSpecies,
+    // fetchAllSpecies,
+    // fetchAllSpeciesAdmin,
+    fetchSpeciesAdmin,
+    fetchSpeciesById,
+    fetchSpecies,
     countTaxonomy,
     addSpecies,
     updateSpecies,
     deleteSpecies,
-    uploadSpeciesImage,
-    selectCoverImage,
-    deleteSpeciesImage,
+    importSpeciesDataFromFile,
 } from "../controllers/species.controller.js";
 
 const router = Router();
 
-// Get species routes
-router.get("/", asyncHandler(getAllSpecies));
-router.get("/filter", asyncHandler(filterSpecies));
-router.get("/:id", asyncHandler(getSpeciesById));
-router.get("/:id/taxonomy/count", asyncHandler(countTaxonomy));
+// Query and Search
+router.post("/search", asyncHandler(fetchSpecies));
+router.post("/admin/search", asyncHandler(fetchSpeciesAdmin));
 
-// Admin species routes
-router.post("/", protectRoute, asyncHandler(addSpecies));
-router.put("/:id", protectRoute, asyncHandler(updateSpecies));
+// Fetch by ID
+router.get("/:id", asyncHandler(fetchSpeciesById)); // User
+router.get("/:id/taxonomy/count", asyncHandler(countTaxonomy)); // User
+
+// Create, Update, Delete - Admin
+router.post("/", protectRoute, uploadMemory.fields([{ name: "images" }, { name: "location", maxCount: 1 }]), asyncHandler(addSpecies));
+router.put("/:id", protectRoute, uploadMemory.fields([{ name: "images" }, { name: "location", maxCount: 1 }]), asyncHandler(updateSpecies));
 router.delete("/:id", protectRoute, asyncHandler(deleteSpecies));
 
-router.post("/:id/image", protectRoute, uploadMemory.single("image"), asyncHandler(uploadSpeciesImage));
-// Admin images routes
-router.post("/:id/image/:imageId/cover", protectRoute, asyncHandler(selectCoverImage));
-router.delete("/:id/image/:imageId", protectRoute, asyncHandler(deleteSpeciesImage));
+// Utility - Admin
+router.post("/import", protectRoute, uploadMemory.single("location"), asyncHandler(importSpeciesDataFromFile));
 
 export default router;

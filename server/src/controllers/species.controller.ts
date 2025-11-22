@@ -1,6 +1,8 @@
 import { type Request, type Response } from "express";
 import { type QueryResult } from "pg";
+import ExcelJS from "exceljs";
 import fs from "fs/promises";
+import { type UploadApiResponse } from "cloudinary";
 
 import { client } from "../lib/db.js";
 import { uploadImage, destroyImage } from "../lib/cloudinaryImageService.js";
@@ -42,11 +44,16 @@ interface Species {
 
 interface SpeciesImage {
     image_url: string;
+    public_id: string;
     is_cover: boolean;
 }
 
+interface InputFiles {
+    images: Express.Multer.File[];
+    location: Express.Multer.File[];
+}
+
 const SPECIES_COLUMNS = [
-    "id",
     "species",
     "name",
     "group_species",
@@ -69,349 +76,884 @@ const SPECIES_COLUMNS = [
 
 const SPECIES_TB = process.env.PG_SPECIES_TB;
 const IMAGE_TB = process.env.PG_IMAGES_TB;
+const POINTS_TB = process.env.PG_POINTS_TB;
 
-// Controller for getting species
-export const getAllSpecies = async (req: Request, res: Response) => {
-    const result = await client.query({
-        name: "get-all-species",
-        text: `SELECT s.id,
-                s.species,
-                s.threatened_symbol,
-                s.group_species,
-                i.image_url
-                FROM ${SPECIES_TB} AS s  
-                INNER JOIN ${IMAGE_TB} AS i 
-                ON s.id = i.species_id
-                WHERE i.is_cover IS TRUE
-                ORDER BY updated_at DESC`,
-    });
+const clearupTmpFiles = async (files: InputFiles | undefined) => {
+    if (!files) return;
 
-    return res.status(200).json({ message: "Get all species successfully", species: result.rows });
-};
-
-export const getSpeciesById = async (req: Request, res: Response) => {
-    const { id } = req.params;
-
-    const result: QueryResult<Species & SpeciesImage> = await client.query({
-        name: "get-species",
-        text: `SELECT s.*,
-                i.image_url,
-                i.is_cover
-                FROM ${SPECIES_TB} AS s  
-                INNER JOIN ${IMAGE_TB} AS i 
-                ON s.id = i.species_id
-                WHERE s.id = $1 
-                ORDER BY updated_at DESC`,
-        values: [id],
-    });
-
-    // Aggregate images into an array
-    const species = result.rows.reduce<(Species & { images: SpeciesImage[] }) | null>((acc, curr) => {
-        const { image_url, is_cover, ...speciesData } = curr;
-        if (!acc) {
-            return { ...speciesData, images: [{ image_url, is_cover }] };
+    for (const [_, values] of Object.entries(files)) {
+        if (values.length !== 0) {
+            for (const file of values) {
+                await fs.rm(file.path);
+            }
         }
-        acc.images.push({ image_url, is_cover });
-        return acc;
-    }, null);
-
-    return res.status(200).json({ message: "Get species successfully", species });
+    }
 };
 
-export const filterSpecies = async (req: Request, res: Response) => {
-    const whereClauses: string[] = [];
-    const values: any[] = [];
+const isValidLatLng = (lat: number, lng: number) => lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
+
+// Controller for user
+// export const fetchAllSpecies = async (req: Request, res: Response) => {
+//     const result = await client.query({
+//         name: "get-all-species",
+//         text: `SELECT s.id,
+//                       s.species,
+//                       s.threatened_symbol,
+//                       s.group_species,
+//                       i.image_url
+//                FROM ${SPECIES_TB} AS s
+//                         INNER JOIN ${IMAGE_TB} AS i
+//                                    ON s.id = i.species_id
+//                WHERE i.is_cover IS TRUE
+//                ORDER BY updated_at DESC`,
+//     });
+
+//     return res.status(200).json({ message: "Get all species successfully", species: result.rows });
+// };
+
+export const fetchSpecies = async (req: Request, res: Response) => {
+    console.log("Entered fetchSpecies controller");
+    const cursor = req.body?.cursor;
+    const filterConditions: string[] = [];
+    const speciesData: any[] = [];
     let paramIndex = 1;
 
-    for (const [key, value] of Object.entries(req.query)) {
-        if (!SPECIES_COLUMNS.includes(key as (typeof SPECIES_COLUMNS)[number])) continue;
+    // Filtering
+    if (req.body) {
+        for (const [key, value] of Object.entries(req.body)) {
+            if (!SPECIES_COLUMNS.includes(key as (typeof SPECIES_COLUMNS)[number])) continue;
 
-        if (value) {
-            if (Array.isArray(value) && value.length > 1) {
-                for (const subValue of value) {
-                    whereClauses.push(`${key} ILIKE $${paramIndex}`);
-                    values.push(`%${subValue}%`);
+            if (value) {
+                if (Array.isArray(value) && value.length > 1) {
+                    for (const subValue of value) {
+                        filterConditions.push(`${key} ILIKE $${paramIndex}`);
+                        speciesData.push(`%${subValue}%`);
+                        paramIndex++;
+                    }
+                } else {
+                    filterConditions.push(`${key} ILIKE $${paramIndex}`);
+                    speciesData.push(`%${value}%`);
                     paramIndex++;
                 }
-            } else {
-                whereClauses.push(`${key} ILIKE $${paramIndex}`);
-                values.push(`%${value}%`);
-                paramIndex++;
             }
         }
     }
 
-    if (whereClauses.length === 0) {
-        throw new AppError("[species/filterSpecies] Missing query parameters", 400);
+    // Cursor pagination
+    if (cursor) {
+        filterConditions.push(`s.id < $${paramIndex}`);
+        speciesData.push(cursor.id as string);
     }
 
-    const queryText = `SELECT s.id,
-                            s.species,
-                            s.threatened_symbol,
-                            s.group_species,
-                            i.image_url
-                        FROM ${SPECIES_TB} as s
-                        INNER JOIN ${IMAGE_TB} AS i ON s.id = i.species_id
-                        WHERE ${whereClauses.join(" OR ")}
-                        AND i.is_cover IS TRUE`;
+    const filterAllSpeciesQuery = `
+        SELECT s.id,
+            s.species,
+            s.threatened_symbol,
+            s.group_species,
+            i.image_url
+        FROM ${SPECIES_TB} as s
+        INNER JOIN ${IMAGE_TB} AS i ON s.id = i.species_id
+        WHERE ${filterConditions.length > 0 ? `${filterConditions.join(" AND ")} AND i.is_cover IS TRUE` : "i.is_cover IS TRUE"}
+        ORDER BY s.id DESC
+        LIMIT 30 
+    `;
 
-    const result: QueryResult<Species & { image_url: string }> = await client.query({
-        text: queryText,
-        values: values,
+    const result = await client.query({
+        text: filterAllSpeciesQuery,
+        values: speciesData,
     });
 
-    return res.status(200).json({ message: "Filter species successfully", species: result.rows });
+    // Create next cursor based on last species
+    let nextCursor: Record<string, string> = {};
+    if (result.rows.length > 0) {
+        nextCursor.id = result.rows[result.rows.length - 1].id;
+    }
+
+    return res.status(200).json({
+        message: "Fetch species successfully",
+        species: result.rows,
+        cursor: result.rows.length > 0 ? nextCursor : null,
+    });
+};
+
+export const fetchSpeciesById = async (req: Request, res: Response) => {
+    console.log("Entered fetchSpeciesById controller");
+    const { id } = req.params;
+
+    const fetchSpeciesQuery = `SELECT *
+                               FROM ${SPECIES_TB}
+                               WHERE id = $1`;
+    const fetchImagesQuery = `SELECT public_id, image_url, is_cover
+                              FROM ${IMAGE_TB}
+                              WHERE species_id = $1`;
+    const fetchPointsQuery = `SELECT id, lat, lng
+                              FROM ${POINTS_TB}
+                              WHERE species_id = $1`;
+
+    const fetchedSpeciesResult = await client.query<Species>({
+        text: fetchSpeciesQuery,
+        values: [id],
+    });
+    const fetchedImagesResult = await client.query<SpeciesImage>({
+        text: fetchImagesQuery,
+        values: [id],
+    });
+    const fetchedPointsResult = await client.query<{ id: string; lat: number; lng: number }>({
+        text: fetchPointsQuery,
+        values: [id],
+    });
+
+    return res.status(200).json({
+        message: "Get species successfully",
+        species: {
+            ...fetchedSpeciesResult.rows[0],
+            images: fetchedImagesResult.rows,
+            points: fetchedPointsResult.rows,
+        },
+    });
 };
 
 export const countTaxonomy = async (req: Request, res: Response) => {
+    console.log("Entered countTaxonomy controller");
     const { id } = req.params;
-    const taxonomyCount: Record<string, number> = {
-        phylum: 0,
-        class: 0,
-        order_species: 0,
-        family: 0,
-        genus: 0,
-    };
+    const taxonomyCount: Record<string, string | number | null>[] = [
+        { level: "phylum", value: null, count: 0 },
+        { level: "class", value: null, count: 0 },
+        { level: "order_species", value: null, count: 0 },
+        { level: "family", value: null, count: 0 },
+        { level: "genus", value: null, count: 0 },
+    ];
+
+    const allowedCols = new Set(["phylum", "class", "order_species", "family", "genus"]);
 
     // Get taxonomy info of species
     const resultOfTaxonomy = await client.query({
         name: "get-taxonomy",
-        text: `SELECT phylum, class, order_species, family, genus FROM ${SPECIES_TB} WHERE id = $1`,
+        text: `SELECT phylum, class, order_species, family, genus
+               FROM ${SPECIES_TB}
+               WHERE id = $1`,
         values: [id],
     });
 
     const taxonomy = resultOfTaxonomy.rows[0];
-
+    console.log(taxonomy);
     for (const [key, value] of Object.entries(taxonomy)) {
-        if (value) {
+        if (value && allowedCols.has(key)) {
             const numberOfTaxonomyLevel = await client.query({
                 name: `count-${key}`,
-                text: `SELECT COUNT(1) AS number  FROM ${SPECIES_TB} WHERE $1 = $2`,
-                values: [key, value],
+                text: `SELECT COUNT(1) AS number
+                       FROM ${SPECIES_TB}
+                       WHERE ${key} = $1`,
+                values: [value],
             });
 
-            // Update count
-            taxonomyCount[key] = numberOfTaxonomyLevel.rows[0].number;
+            // Update value and count
+            taxonomyCount.forEach((item) => {
+                if (item.level === key) {
+                    item.value = value as string;
+                    item.count = Number(numberOfTaxonomyLevel.rows[0]?.number ?? 0);
+                }
+            });
         }
     }
 
     return res.status(200).json({ message: "Count taxonomy successfully", taxonomy: taxonomyCount });
 };
 
-// Controller for managing species (admin only)
-export const addSpecies = async (req: Request, res: Response) => {
-    const species = req.body?.species;
+// Controller for admin
+// export const fetchAllSpeciesAdmin = async (req: Request, res: Response) => {
+//     const { id } = req.query;
 
-    if (!species) {
-        throw new AppError("[species/addSpecies] Species (name) field is required", 400);
+//     const fetchAllSpeciesQuery = `
+//         SELECT s.*,
+//             imgs.images,
+//             pts.points
+//         FROM ${SPECIES_TB} s
+//         LEFT JOIN LATERAL (
+//             SELECT JSON_AGG(JSON_BUILD_OBJECT('public_id', i.public_id, 'image_url', i.image_url, 'is_cover', i.is_cover)) AS images
+//             FROM ${IMAGE_TB} i
+//             WHERE i.species_id = s.id
+//         ) imgs ON true
+//         LEFT JOIN LATERAL (
+//             SELECT JSON_AGG(JSON_BUILD_OBJECT('id', p.id, 'lat', p.lat, 'lng', p.lng)) AS points
+//             FROM ${POINTS_TB} p
+//             WHERE p.species_id = s.id
+//         ) pts ON true
+//         ${id ? "WHERE s.id < $1" : ""}
+//         ORDER BY s.id DESC
+//         LIMIT 30
+//     `;
+
+//     let result;
+//     if (id) {
+//         result = await client.query({
+//             name: "fetch-all-species-admin-with-id",
+//             text: fetchAllSpeciesQuery,
+//             values: [id],
+//         });
+//     } else {
+//         result = await client.query({
+//             name: "fetch-all-species-admin",
+//             text: fetchAllSpeciesQuery,
+//         });
+//     }
+
+//     return res.status(200).json({
+//         message: "Get all species successfully",
+//         species: result.rows,
+//         nextCursor: result.rows.length > 0 ? result.rows[result.rows.length - 1].id : null,
+//     });
+// };
+
+export const fetchSpeciesAdmin = async (req: Request, res: Response) => {
+    console.log("Entered fetchSpeciesAdmin controller");
+    const order = req.body?.order;
+    const dir = req.body?.dir;
+    const cursor = req.body?.cursor;
+    const filterConditions: string[] = [];
+    const speciesData: any[] = [];
+    let paramIndex = 1;
+
+    // Filtering
+    if (req.body) {
+        for (const [key, value] of Object.entries(req.body)) {
+            if (!SPECIES_COLUMNS.includes(key as (typeof SPECIES_COLUMNS)[number])) continue;
+
+            if (value) {
+                if (Array.isArray(value) && value.length > 1) {
+                    for (const subValue of value) {
+                        filterConditions.push(`${key} ILIKE $${paramIndex}`);
+                        speciesData.push(`%${subValue}%`);
+                        paramIndex++;
+                    }
+                } else {
+                    filterConditions.push(`${key} ILIKE $${paramIndex}`);
+                    speciesData.push(`%${value}%`);
+                    paramIndex++;
+                }
+            }
+        }
     }
 
-    // Check if species already exists
+    // Cursor pagination
+    if (cursor) {
+        let cursorFilterQuery;
+
+        if (order && dir) {
+            const comparator = dir === "asc" ? ">" : "<";
+            cursorFilterQuery = `${order} ${comparator} $${paramIndex}`;
+            speciesData.push(cursor.value as string);
+            paramIndex++;
+        }
+
+        if (cursorFilterQuery) {
+            cursorFilterQuery = `(${cursorFilterQuery} OR (${order} = $${paramIndex} AND s.id < $${paramIndex + 1}))`;
+            speciesData.push(cursor.value as string, cursor.id as string);
+        } else {
+            cursorFilterQuery = `s.id < $${paramIndex}`;
+            speciesData.push(cursor.id as string);
+        }
+
+        filterConditions.push(cursorFilterQuery);
+    }
+
+    // Sorting
+    let sortOrder = "";
+    if (order && dir) {
+        sortOrder = `${order} ${dir}, s.id DESC`;
+    }
+
+    const filterAllSpeciesQuery = `
+            SELECT s.*,
+                imgs.images,
+                pts.points
+            FROM ${SPECIES_TB} s
+            LEFT JOIN LATERAL (
+                SELECT JSON_AGG(JSON_BUILD_OBJECT('public_id', i.public_id, 'image_url', i.image_url, 'is_cover', i.is_cover)) AS images
+                FROM ${IMAGE_TB} i
+                WHERE i.species_id = s.id
+            ) imgs ON true
+            LEFT JOIN LATERAL (
+                SELECT JSON_AGG(JSON_BUILD_OBJECT('id', p.id, 'lat', p.lat, 'lng', p.lng)) AS points
+                FROM ${POINTS_TB} p
+                WHERE p.species_id = s.id
+            ) pts ON true
+            WHERE ${filterConditions.length > 0 ? filterConditions.join(" AND ") : "TRUE"}
+            ORDER BY ${sortOrder ? sortOrder : "s.id DESC"}
+            LIMIT 30 
+    `;
+
+    const result = await client.query({
+        text: filterAllSpeciesQuery,
+        values: speciesData,
+    });
+
+    // Create next cursor based on last species
+    let nextCursor: Record<string, string> = {};
+    if (result.rows.length > 0) {
+        nextCursor.value = result.rows[result.rows.length - 1][order as string];
+        nextCursor.id = result.rows[result.rows.length - 1].id;
+    }
+
+    return res.status(200).json({
+        message: "Fetch species successfully",
+        species: result.rows,
+        cursor: result.rows.length > 0 ? nextCursor : null,
+    });
+};
+
+export const addSpecies = async (req: Request, res: Response) => {
+    const name = req.body?.species;
+    const files = req.files;
+    let coverImageIndex = req.body?.coverImageIndex;
+    const imageFiles = files && "images" in files ? files["images"] : undefined;
+    const locationFile = files && "location" in files ? files["location"]?.[0] : undefined;
+    const publicIdOfUploadedImages: string[] = [];
+    const secureUrlOfUploadedImages: string[] = [];
+    const points: [number, number][] = [];
+
+    // Checking fields
+    if (!imageFiles) {
+        await clearupTmpFiles(files as InputFiles | undefined);
+        throw new AppError("[species/addSpeciesPro] Missing image files", 400);
+    }
+
+    if (
+        coverImageIndex === undefined ||
+        isNaN(Number(coverImageIndex)) ||
+        Number(coverImageIndex) < 0 ||
+        Number(coverImageIndex) >= imageFiles.length
+    ) {
+        await clearupTmpFiles(files as InputFiles | undefined);
+        throw new AppError("[species/addSpeciesPro] Missing or invalid cover image index", 400);
+    } else {
+        coverImageIndex = Number(coverImageIndex);
+    }
+
+    if (!name) {
+        await clearupTmpFiles(files as InputFiles | undefined);
+        throw new AppError("[species/addSpeciesPro] Species (name) field is required", 400);
+    }
+    // Checking duplicate species name
     const checkSpecies = await client.query({
         name: "check-species-exists",
-        text: `SELECT 1 FROM ${SPECIES_TB} WHERE species = $1`,
-        values: [species],
+        text: `SELECT 1
+               FROM ${SPECIES_TB}
+               WHERE species = $1`,
+        values: [name],
     });
 
     if (checkSpecies.rowCount !== null && checkSpecies.rowCount > 0) {
+        await clearupTmpFiles(files as InputFiles | undefined);
         throw new AppError("[species/addSpecies] Species already exists", 400);
     }
 
-    // Create dynamic insert query
-    const columns: string[] = [];
-    const values: any[] = [];
-    const paramIndexes: string[] = [];
-    let paramIndex = 1;
+    // Checking location file and parse points
+    if (locationFile) {
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.readFile(locationFile.path);
+        const worksheet = workbook.worksheets[0];
 
-    for (const [key, value] of Object.entries(req.body)) {
-        if (!SPECIES_COLUMNS.includes(key as (typeof SPECIES_COLUMNS)[number])) continue;
+        const headerRow = worksheet?.getRow(1);
+        if (headerRow?.getCell(1).value !== "lat" && headerRow?.getCell(2).value !== "lng") {
+            throw new AppError("[species/addSpeciesPro] Invalid structure file", 400);
+        }
 
-        if (value) {
-            columns.push(key);
-            // Trim only if the value is a string, otherwise keep the value as-is
-            if (typeof value === "string") {
-                values.push(value.trim());
-            } else {
-                values.push(value);
+        const rowCount = worksheet?.rowCount || 0;
+        for (let rowNumber = 2; rowNumber <= rowCount; rowNumber++) {
+            const lat = worksheet?.getRow(rowNumber).getCell(1).value as number;
+            const lng = worksheet?.getRow(rowNumber).getCell(2).value as number;
+
+            if (!isValidLatLng(lat, lng)) {
+                await clearupTmpFiles(files as InputFiles | undefined);
+                throw new AppError("[points/createPoint] Invalid lat/lng", 400);
             }
-            paramIndexes.push(`$${paramIndex}`);
-            paramIndex++;
+
+            points.push([lat, lng]);
         }
     }
 
-    const insertQuery = `INSERT INTO ${SPECIES_TB} (${columns.join(", ")}) VALUES (${paramIndexes.join(", ")}) RETURNING *`;
+    // Insert species, images, points in a transaction
+    try {
+        await client.query("BEGIN");
 
-    const result: QueryResult<Species> = await client.query({
-        text: insertQuery,
-        values: values,
-    });
+        const speciesColumns: string[] = [];
+        const speciesData: any[] = [];
+        const paramIndexes: string[] = [];
+        let paramIndex = 1;
 
-    return res.status(201).json({ message: "Add species successfully", species: result.rows[0] });
+        for (const [key, value] of Object.entries(req.body)) {
+            if (!SPECIES_COLUMNS.includes(key as (typeof SPECIES_COLUMNS)[number])) continue;
+
+            if (value) {
+                speciesColumns.push(key);
+                // Trim only if the value is a string, otherwise keep the value as-is
+                if (typeof value === "string") {
+                    speciesData.push(value.trim());
+                } else {
+                    speciesData.push(value);
+                }
+                paramIndexes.push(`$${paramIndex}`);
+                paramIndex++;
+            }
+        }
+
+        const insertSpeciesQuery = `INSERT INTO ${SPECIES_TB} (${speciesColumns.join(", ")})
+                                    VALUES (${paramIndexes.join(", ")}) RETURNING *`;
+        const insertImageQuery = `INSERT INTO ${IMAGE_TB}
+                                  VALUES ($1, $2, $3, $4) RETURNING *`;
+        const insertPointQuery = `INSERT INTO ${POINTS_TB} (species_id, lat, lng)
+                                  VALUES ($1, $2, $3) RETURNING *`;
+
+        // Insert species
+        const insertedSpeciesResult = await client.query(insertSpeciesQuery, speciesData);
+        const { id: speciesId } = insertedSpeciesResult.rows[0];
+
+        // Upload images to cloudinary
+        for (const image of imageFiles) {
+            const imageRes = await uploadImage(image.path);
+            if (!imageRes.public_id || !imageRes.secure_url) {
+                await clearupTmpFiles(files as InputFiles | undefined);
+                for (const public_id of publicIdOfUploadedImages) {
+                    await destroyImage(public_id);
+                }
+                throw new AppError("[species/addSpeciesPro] Failed to upload image", 503);
+            }
+            publicIdOfUploadedImages.push(imageRes.public_id);
+            secureUrlOfUploadedImages.push(imageRes.secure_url);
+        }
+
+        // Insert images
+        for (let i = 0; i < publicIdOfUploadedImages.length; i++) {
+            const publicId = publicIdOfUploadedImages[i];
+            const secureUrl = secureUrlOfUploadedImages[i];
+            await client.query(insertImageQuery, [publicId, speciesId, secureUrl, i === coverImageIndex]);
+        }
+
+        // Insert points
+        for (const [lat, lng] of points) {
+            await client.query(insertPointQuery, [speciesId, lat, lng]);
+        }
+
+        await client.query("COMMIT");
+        await clearupTmpFiles(files as InputFiles | undefined);
+
+        return res.status(201).json({
+            message: "Create species successfully",
+        });
+    } catch (error) {
+        await client.query("ROLLBACK");
+        await clearupTmpFiles(files as InputFiles | undefined);
+        throw error;
+    }
 };
 
 export const updateSpecies = async (req: Request, res: Response) => {
-    const { id } = req.params;
-    const species = req.body?.species;
+    const { id: speciesId } = req.params;
+    const name = req.body?.species;
+    const files = req.files;
+    let coverImageIndex = req.body?.coverImageIndex;
+    const imageFiles = files && "images" in files ? files["images"] : undefined;
+    const locationFile = files && "location" in files ? files["location"]?.[0] : undefined;
+    const publicIdOfUploadedImages: string[] = [];
+    const secureUrlOfUploadedImages: string[] = [];
+    const points: [number, number][] = [];
 
-    if (!species) {
-        throw new AppError("[species/updateSpecies] Species (name) field is required", 400);
+    // Checking fields
+    if (!imageFiles) {
+        await clearupTmpFiles(files as InputFiles | undefined);
+        throw new AppError("[species/addSpeciesPro] Missing image files", 400);
     }
 
-    // Check if species exists
-    const speciesExists = await client.query({
-        name: "check-species-exists-by-id",
-        text: `SELECT 1 FROM ${SPECIES_TB} WHERE id = $1`,
-        values: [id],
-    });
-
-    if (speciesExists.rowCount === 0) {
-        throw new AppError("[species/updateSpecies] Species not found", 404);
+    if (
+        coverImageIndex === undefined ||
+        isNaN(Number(coverImageIndex)) ||
+        Number(coverImageIndex) < 0 ||
+        Number(coverImageIndex) >= imageFiles.length
+    ) {
+        await clearupTmpFiles(files as InputFiles | undefined);
+        throw new AppError("[species/addSpeciesPro] Missing or invalid cover image index", 400);
+    } else {
+        coverImageIndex = Number(coverImageIndex);
     }
 
-    // Check if name species already exists
+    if (!name) {
+        await clearupTmpFiles(files as InputFiles | undefined);
+        throw new AppError("[species/addSpeciesPro] Species (name) field is required", 400);
+    }
+
+    // Checking duplicate species name
     const checkSpecies = await client.query({
         name: "check-species-exists",
-        text: `SELECT 1 FROM ${SPECIES_TB} WHERE species = $1`,
-        values: [species],
+        text: `SELECT 1
+               FROM ${SPECIES_TB}
+               WHERE species = $1 AND id <> $2`,
+        values: [name, speciesId],
     });
 
     if (checkSpecies.rowCount !== null && checkSpecies.rowCount > 0) {
-        throw new AppError("[species/updateSpecies] Species (name) already exists", 400);
+        await clearupTmpFiles(files as InputFiles | undefined);
+        throw new AppError("[species/addSpecies] Species already exists", 400);
     }
 
-    // Create dynamic update query
-    const setClauses: string[] = [];
-    const values: any[] = [];
-    let paramIndex = 1;
+    // Checking location file and parse points
+    if (locationFile) {
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.readFile(locationFile.path);
+        const worksheet = workbook.worksheets[0];
 
-    for (const [key, value] of Object.entries(req.body)) {
-        if (!SPECIES_COLUMNS.includes(key as (typeof SPECIES_COLUMNS)[number])) continue;
+        const headerRow = worksheet?.getRow(1);
+        if (headerRow?.getCell(1).value !== "lat" && headerRow?.getCell(2).value !== "lng") {
+            throw new AppError("[species/addSpeciesPro] Invalid structure file", 400);
+        }
 
-        if (value) {
-            setClauses.push(`${key} = $${paramIndex}`);
-            // Trim only if the value is a string, otherwise keep the value as-is
-            if (typeof value === "string") {
-                values.push(value.trim());
-            } else {
-                values.push(value);
+        const rowCount = worksheet?.rowCount || 0;
+        for (let rowNumber = 2; rowNumber <= rowCount; rowNumber++) {
+            const lat = worksheet?.getRow(rowNumber).getCell(1).value as number;
+            const lng = worksheet?.getRow(rowNumber).getCell(2).value as number;
+
+            if (!isValidLatLng(lat, lng)) {
+                await clearupTmpFiles(files as InputFiles | undefined);
+                throw new AppError("[points/createPoint] Invalid lat/lng", 400);
             }
-            paramIndex++;
+
+            points.push([lat, lng]);
         }
     }
 
-    values.push(id);
+    // Update species, images, points in a transaction
+    try {
+        await client.query("BEGIN");
 
-    const updateQuery = `UPDATE species
-                        SET ${setClauses.join(", ")}
-                        WHERE id = $${paramIndex} RETURNING *`;
+        // Delete existing images and points
+        const fetchPublicIdsQuery = `SELECT public_id FROM ${IMAGE_TB} WHERE species_id = $1`;
+        const fetchPointIdsQuery = `SELECT id FROM ${POINTS_TB} WHERE species_id = $1`;
 
-    const result: QueryResult<Species> = await client.query({
-        text: updateQuery,
-        values: values,
-    });
+        // Fetch existing image public ids
+        const fetchedPublicIdsResult = await client.query({
+            name: "fetch-existing-image-public-ids",
+            text: fetchPublicIdsQuery,
+            values: [speciesId],
+        });
 
-    return res.status(200).json({ message: "Update species successfully", species: result.rows[0] });
+        // Fetch existing point ids
+        const fetchedPointIdsResult = await client.query({
+            name: "fetch-existing-point-ids",
+            text: fetchPointIdsQuery,
+            values: [speciesId],
+        });
+
+        // Destroy old images from cloudinary
+        const destroyRes = fetchedPublicIdsResult.rows.map((row) => destroyImage(row.public_id));
+        await Promise.all(destroyRes);
+
+        // Delete old images
+        fetchedPublicIdsResult.rows.forEach(async (row) => {
+            await client.query({
+                name: "delete-image",
+                text: `DELETE
+                   FROM ${IMAGE_TB}
+                   WHERE public_id = $1`,
+                values: [row.public_id],
+            });
+        });
+
+        // Delete old points
+        fetchedPointIdsResult.rows.forEach(async (row) => {
+            await client.query({
+                name: "delete-point",
+                text: `DELETE
+                   FROM ${POINTS_TB}
+                   WHERE id = $1`,
+                values: [row.id],
+            });
+        });
+
+        // Insert new species, images, points
+        const setClauses: string[] = [];
+        const speciesData: any[] = [];
+        let paramIndex = 1;
+
+        for (const [key, value] of Object.entries(req.body)) {
+            if (!SPECIES_COLUMNS.includes(key as (typeof SPECIES_COLUMNS)[number])) continue;
+
+            if (value) {
+                setClauses.push(`${key} = $${paramIndex}`);
+                if (typeof value === "string") {
+                    speciesData.push(value.trim());
+                } else {
+                    speciesData.push(value);
+                }
+                paramIndex++;
+            }
+        }
+
+        speciesData.push(speciesId);
+
+        const updateSpeciesQuery = `UPDATE ${SPECIES_TB}
+                                    SET ${setClauses.join(", ")}
+                                    WHERE id = $${paramIndex}`;
+        const insertImageQuery = `INSERT INTO ${IMAGE_TB}
+                                  VALUES ($1, $2, $3, $4) RETURNING *`;
+        const insertPointQuery = `INSERT INTO ${POINTS_TB} (species_id, lat, lng)
+                                  VALUES ($1, $2, $3) RETURNING *`;
+
+        //   Update species
+        await client.query(updateSpeciesQuery, speciesData);
+
+        // Upload new images to cloudinary
+        for (const image of imageFiles) {
+            const imageRes = await uploadImage(image.path);
+            if (!imageRes.public_id || !imageRes.secure_url) {
+                await clearupTmpFiles(files as InputFiles | undefined);
+                for (const public_id of publicIdOfUploadedImages) {
+                    await destroyImage(public_id);
+                }
+                throw new AppError("[species/addSpeciesPro] Failed to upload image", 503);
+            }
+            publicIdOfUploadedImages.push(imageRes.public_id);
+            secureUrlOfUploadedImages.push(imageRes.secure_url);
+        }
+
+        // Insert new images
+        for (let i = 0; i < publicIdOfUploadedImages.length; i++) {
+            const publicId = publicIdOfUploadedImages[i];
+            const secureUrl = secureUrlOfUploadedImages[i];
+            await client.query(insertImageQuery, [publicId, speciesId, secureUrl, i === coverImageIndex]);
+        }
+
+        // Insert new points
+        for (const [lat, lng] of points) {
+            await client.query(insertPointQuery, [speciesId, lat, lng]);
+        }
+
+        await client.query("COMMIT");
+        await clearupTmpFiles(files as InputFiles | undefined);
+
+        return res.status(200).json({ message: "Update species successfully" });
+    } catch (error) {
+        await client.query("ROLLBACK");
+        await clearupTmpFiles(files as InputFiles | undefined);
+        throw error;
+    }
 };
 
 export const deleteSpecies = async (req: Request, res: Response) => {
-    const { id } = req.params;
+    const { id: speciesId } = req.params;
+
+    // Fetch existing image public ids
+    const fetchedPublicIdsResult = await client.query({
+        name: "fetch-existing-image-public-ids",
+        text: `SELECT public_id FROM ${IMAGE_TB} WHERE species_id = $1`,
+        values: [speciesId],
+    });
+
+    // Destroy old images from cloudinary
+    const destroyRes = fetchedPublicIdsResult.rows.map((row) => destroyImage(row.public_id));
+    await Promise.all(destroyRes);
 
     await client.query({
         name: "delete-species",
         text: `DELETE
-                   FROM ${SPECIES_TB}
-                   WHERE id = $1`,
-        values: [id],
+               FROM ${SPECIES_TB}
+               WHERE id = $1`,
+        values: [speciesId],
     });
 
     return res.status(200).json({ message: "Delete species successfully" });
 };
 
-// Controller for managing species images (admin only)
-export const uploadSpeciesImage = async (req: Request, res: Response) => {
-    const { id } = req.params;
-    const image = req.file;
+export const importSpeciesDataFromFile = async (req: Request, res: Response) => {
+    const file = req.file;
 
-    if (!image) {
-        throw new AppError("[species/uploadSpeciesImage] Image is required", 400);
+    if (!file) {
+        throw new AppError("[species/importSpeciesDataFromFile] Missing file", 400);
     }
 
-    // Upload image
-    const uploadRes = await uploadImage(image.path);
-    // Remove local image
-    await fs.rm(image.path);
+    const logs: { rowNumber: number; messages: string[] }[] = [];
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.readFile(file.path);
+    const worksheet = workbook.worksheets[0];
+    const speciesObj: Record<string, Record<string, any>> = {};
 
-    if (!uploadRes.public_id || !uploadRes.secure_url) {
-        throw new AppError(`[species/uploadSpeciesImage] Failed to upload image (missing image url)`, 503);
+    const columns = [
+        "species",
+        "name",
+        "group",
+        "description",
+        "characteristic",
+        "habitas",
+        "impact",
+        "threatened_symbol",
+        "vn_distribution",
+        "global_distribution",
+        "phylum",
+        "class",
+        "order",
+        "family",
+        "genus",
+        "references",
+        "lat",
+        "long",
+    ];
+
+    const headerRow = worksheet?.getRow(1);
+    if (
+        headerRow?.getCell(1).text !== columns[0] ||
+        headerRow?.getCell(2).text !== columns[1] ||
+        headerRow?.getCell(3).text !== columns[2] ||
+        headerRow?.getCell(4).text !== columns[3] ||
+        headerRow?.getCell(5).text !== columns[4] ||
+        headerRow?.getCell(6).text !== columns[5] ||
+        headerRow?.getCell(7).text !== columns[6] ||
+        headerRow?.getCell(8).text !== columns[7] ||
+        headerRow?.getCell(9).text !== columns[8] ||
+        headerRow?.getCell(10).text !== columns[9] ||
+        headerRow?.getCell(11).text !== columns[10] ||
+        headerRow?.getCell(12).text !== columns[11] ||
+        headerRow?.getCell(13).text !== columns[12] ||
+        headerRow?.getCell(14).text !== columns[13] ||
+        headerRow?.getCell(15).text !== columns[14] ||
+        headerRow?.getCell(16).text !== columns[15] ||
+        headerRow?.getCell(17).text !== columns[16] ||
+        headerRow?.getCell(18).text !== columns[17]
+    ) {
+        await fs.rm(file.path);
+        throw new AppError(
+            "[species/checkSpeciesImportFile] Invalid structure file: A1=species; B1=name; C1=group; D1=description; E1=characteristic; F1=habitas; G1=impact; H1=threatened_symbol; I1=vn_distribution; J1=global_distribution; K1=phylum; L1=class; M1=order; N1=family; O1=genus; P1=references; Q1=lat; R1=long",
+            400
+        );
     }
 
-    const insertImageRes = await client.query({
-        text: `INSERT INTO ${IMAGE_TB}
-                   VALUES ($1, $2, $3) RETURNING *`,
-        values: [uploadRes.public_id, id, uploadRes.secure_url],
-    });
+    const rowCount = worksheet?.rowCount || 0;
+    for (let rowNumber = 2; rowNumber <= rowCount; rowNumber++) {
+        const species = worksheet?.getRow(rowNumber).getCell(1).text;
+        const threatenedSymbol = worksheet?.getRow(rowNumber).getCell(8).text;
+        const lat = worksheet?.getRow(rowNumber).getCell(17).text.slice(0, -1);
+        const lng = worksheet?.getRow(rowNumber).getCell(18).text.slice(0, -1);
+        const latNum = Number(lat);
+        const lngNum = Number(lng);
+        const messages: string[] = [];
 
-    return res.status(201).json({
-        message: "Upload image successfully",
-        image: insertImageRes.rows[0],
-    });
-};
+        // Validate required fields
+        if (species === "") {
+            messages.push("Missing species name");
+        } else {
+            // Check duplicate species name
+            const checkSpecies = await client.query({
+                name: "check-species-exists",
+                text: `
+                        SELECT 1
+                        FROM ${SPECIES_TB}
+                        WHERE species = $1`,
+                values: [species],
+            });
 
-export const selectCoverImage = async (req: Request, res: Response) => {
-    const { id: speciesId, imageId: publicId } = req.params;
+            if (checkSpecies.rowCount !== null && checkSpecies.rowCount > 0) {
+                messages.push("Species name already exists");
+            }
+        }
 
-    if (!publicId) {
-        throw new Error("[species/selectCoverImage] Image id is required");
+        if (threatenedSymbol === "") {
+            messages.push("Missing threatened symbol");
+        }
+
+        if (lat === "") {
+            messages.push("Missing lat");
+        }
+
+        if (lng === "") {
+            messages.push("Missing long");
+        }
+
+        if (lat && lng) {
+            if (!isValidLatLng(latNum, lngNum)) {
+                messages.push("Invalid lat/long");
+            }
+        }
+
+        if (messages.length > 0) {
+            logs.push({ rowNumber, messages });
+        } else if (species) {
+            if (speciesObj[species] === undefined) {
+                const newSpecies: Record<string, any> = { points: [] };
+                worksheet?.getRow(rowNumber).eachCell((cell, colNumber) => {
+                    const cellValue = cell.text;
+                    let colName = columns[colNumber - 1];
+
+                    if (colName === "group") {
+                        colName = "group_species";
+                    } else if (colName === "order") {
+                        colName = "order_species";
+                    } else if (colName === "references") {
+                        colName = "references_text";
+                    }
+
+                    if (cellValue !== "" && colName && colNumber <= 16) {
+                        newSpecies[colName] = cellValue;
+                    }
+                });
+                speciesObj[species] = newSpecies;
+            }
+
+            speciesObj[species].points.push([latNum, lngNum]);
+        }
     }
 
-    // Reset cover image
-    await client.query({
-        name: "reset-cover-image",
-        text: `UPDATE ${IMAGE_TB}
-                    SET is_cover = FALSE
-                    WHERE species_id = $1
-                    AND is_cover = TRUE`,
-        values: [speciesId],
-    });
-
-    // Set new cover image
-    await client.query({
-        name: "select-cover-image",
-        text: `UPDATE ${IMAGE_TB}
-                   SET is_cover = TRUE
-                   WHERE public_id = $1`,
-        values: [publicId],
-    });
-
-    return res.status(200).json({
-        message: "Select cover image successfully",
-    });
-};
-
-export const deleteSpeciesImage = async (req: Request, res: Response) => {
-    const { imageId: publicId } = req.params;
-
-    if (!publicId) {
-        throw new Error("[species/deleteSpeciesImage] Image id is required");
+    if (logs.length > 0) {
+        await fs.rm(file.path);
+        return res.status(400).json({ message: "File has invalid data", logs });
     }
 
-    // Destroy image from cloudinary
-    const destroyRes = await destroyImage(publicId);
+    await fs.rm(file.path);
 
-    if (destroyRes.result !== "ok" && destroyRes.result !== "not found") {
-        throw new AppError(`[species/deleteSpeciesImage] Failed to destroy image: ${destroyRes.result}`, 503);
+    // Insert species and points in a transaction
+    try {
+        await client.query("BEGIN");
+
+        for (const species of Object.values(speciesObj)) {
+            const speciesColumns: string[] = [];
+            const speciesData: any[] = [];
+            const paramIndexes: string[] = [];
+            let paramIndex = 1;
+
+            for (const [key, value] of Object.entries(species)) {
+                if (key === "points") continue;
+
+                if (value) {
+                    speciesColumns.push(key);
+                    // Trim only if the value is a string, otherwise keep the value as-is
+                    if (typeof value === "string") {
+                        speciesData.push(value.trim());
+                    } else {
+                        speciesData.push(value);
+                    }
+                    paramIndexes.push(`$${paramIndex}`);
+                    paramIndex++;
+                }
+            }
+
+            const insertSpeciesQuery = `INSERT INTO ${SPECIES_TB} (${speciesColumns.join(", ")}) VALUES (${paramIndexes.join(
+                ", "
+            )}) RETURNING id`;
+
+            // Insert species
+            const insertedSpeciesResult = await client.query(insertSpeciesQuery, speciesData);
+            const { id: speciesId } = insertedSpeciesResult.rows[0];
+
+            if (species.points.length > 0) {
+                species.points.forEach(async ([lat, lng]: [number, number]) => {
+                    const insertPointQuery = `INSERT INTO ${POINTS_TB} (species_id, lat, lng) VALUES ($1, $2, $3)`;
+                    await client.query(insertPointQuery, [speciesId, lat, lng]);
+                });
+            }
+
+            await client.query("COMMIT");
+        }
+    } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
     }
 
-    // Delete image record from database
-    await client.query({
-        name: "delete-image",
-        text: `DELETE
-                   FROM ${IMAGE_TB}
-                   WHERE public_id = $1 RETURNING *`,
-        values: [publicId],
-    });
-
-    return res.status(200).json({
-        message: "Destroy image successfully",
-    });
+    return res.status(201).json({ message: "Import species data successfully" });
 };

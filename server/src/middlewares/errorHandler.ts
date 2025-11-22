@@ -2,7 +2,7 @@ import type {NextFunction, Request, Response} from "express";
 
 import {AppError} from "../utils/appError.js";
 
-export const errorHandler = (
+export const errorHandler = async (
     error: any,
     req: Request,
     res: Response,

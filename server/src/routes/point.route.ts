@@ -6,9 +6,9 @@ import { getPoints, createPoint, updatePoint, deletePoint } from "../controllers
 
 const router = Router();
 
-router.get(":speciesId", asyncHandler(getPoints));
-router.post(":speciesId", protectRoute, asyncHandler(createPoint));
-router.put(":id", protectRoute, asyncHandler(updatePoint));
-router.delete(":id", protectRoute, asyncHandler(deletePoint))
+router.get("/:speciesId", asyncHandler(getPoints));
+router.post("/:speciesId", protectRoute, asyncHandler(createPoint));
+router.put("/:id", protectRoute, asyncHandler(updatePoint));
+router.delete("/:id", protectRoute, asyncHandler(deletePoint))
 
 export default router;

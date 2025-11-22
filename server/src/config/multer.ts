@@ -1,13 +1,13 @@
 import path from "path";
 import fs from "fs/promises";
-import multer, {type FileFilterCallback} from "multer";
-import {type Request} from "express";
+import multer, { type FileFilterCallback } from "multer";
+import { type Request } from "express";
 
 const __dirname = path.resolve();
 const storagePath = path.join(__dirname, "/src/tmp");
 
 // create storage directory
-await fs.mkdir(storagePath, {recursive: true});
+await fs.mkdir(storagePath, { recursive: true });
 
 const diskStorage = multer.diskStorage({
     destination: (req, file, cb) => {
@@ -22,16 +22,21 @@ const diskStorage = multer.diskStorage({
     },
 });
 
-const fileFilter = (
-    req: Request,
-    file: Express.Multer.File,
-    cb: FileFilterCallback
-) => {
-    const acceptedTypes = ["image/jpeg", "image/png", "image/jpg", "image/webp"];
-    if (acceptedTypes.includes(file.mimetype)) {
-        cb(null, true);
-    } else {
-        cb(new Error("Only JPEG, PNG, JPG and WEBP are allowed"));
+const fileFilter = (req: Request, file: Express.Multer.File, cb: FileFilterCallback) => {
+    if (file.fieldname === "images") {
+        if (["image/jpeg", "image/png", "image/jpg", "image/webp"].includes(file.mimetype)) {
+            cb(null, true);
+        } else {
+            cb(new Error("Only JPEG, PNG, JPG , WEBP are allowed"));
+        }
+    }
+
+    if (file.fieldname === "location") {
+        if (file.mimetype === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet") {
+            cb(null, true);
+        } else {
+            cb(new Error("Only XLSX files are allowed for locations"));
+        }
     }
 };
 
