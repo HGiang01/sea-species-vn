@@ -6,6 +6,7 @@ import { conn } from "./libs/db.js";
 import { errorHandler } from "./middlewares/errorHandler.js";
 import { clearBlacklist } from "./utils/clearBlacklist.js";
 import authRoute from "./routes/auth.route.js";
+import speciesRouter from "./routes/species.route.js";
 
 // Configs
 const PORT = process.env.PORT || 3000;
@@ -22,6 +23,7 @@ const isConnectedDB = await conn();
 
 // Routes
 app.use("/api/auth", authRoute);
+app.use("/api/species", speciesRouter);
 app.use(errorHandler);
 
 // Clear blacklist tokens at startup
