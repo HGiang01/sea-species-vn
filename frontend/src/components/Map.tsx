@@ -13,7 +13,7 @@ const markerIcon = L.divIcon({
     popupAnchor: [0, -8],
 });
 
-const createClusterCustomIcon = function (cluster) {
+const createClusterCustomIcon = function (cluster: { getChildCount: () => number }) {
     const count = cluster.getChildCount();
 
     return L.divIcon({
