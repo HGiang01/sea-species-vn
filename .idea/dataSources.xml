@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="DataSourceManagerImpl" format="xml" multifile-model="true">
+    <data-source source="LOCAL" name="sea_species@dpg-d4pf71e3jp1c73fcr7p0-a.singapore-postgres.render.com" uuid="e1f8fa32-18d5-4bd5-a49a-2ebc45d5fae2">
+      <driver-ref>postgresql</driver-ref>
+      <synchronize>true</synchronize>
+      <jdbc-driver>org.postgresql.Driver</jdbc-driver>
+      <jdbc-url>jdbc:postgresql://dpg-d4pf71e3jp1c73fcr7p0-a.singapore-postgres.render.com:5432/sea_species</jdbc-url>
+      <working-dir>$ProjectFileDir$</working-dir>
+    </data-source>
+  </component>
+</project>
