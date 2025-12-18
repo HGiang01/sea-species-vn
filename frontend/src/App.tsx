@@ -6,6 +6,7 @@ import IntroPage from "./Pages/IntroPage";
 import LoginPage from "./Pages/LoginPage";
 import ChangePasswordPage from "./Pages/ChangePasswordPage";
 import HomePage from "./Pages/HomePage";
+import SpeciesPage from "./Pages/SpeciesPage";
 import NotFoundPage from "./Pages/NotFoundPage";
 import useAuthStore from "./store/useAuthStore";
 
@@ -19,6 +20,7 @@ function App() {
                     <Route path="/login" element={<LoginPage />} />
                     <Route path="/change-password" element={<ChangePasswordPage />} />
                     <Route path="/home" element={<HomePage />} />
+                    <Route path="/species/:id" element={<SpeciesPage />} />
                     <Route path="*" element={<NotFoundPage />} />
                 </Routes>
             </BrowserRouter>
