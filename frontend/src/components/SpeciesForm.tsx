@@ -267,7 +267,7 @@ const SpeciesForm = forwardRef<SpeciesFormHandle, Props>(({ species }, ref) => {
                                     {/* Image preview */}
                                     {images && (
                                         <>
-                                            <div className="flex justify-center items-center max-w-[320px] space-x-1 overflow-x-auto">
+                                            <div className="flex items-center max-w-[320px] space-x-1 overflow-x-auto">
                                                 {images?.map((image, index) => (
                                                     <div
                                                         key={index}
