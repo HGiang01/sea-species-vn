@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS images
     is_cover   BOOLEAN DEFAULT FALSE
 );
 
-CREATE TABLE points
+CREATE TABLE IF NOT EXISTS points
 (
     id         UUID DEFAULT uuidv7() PRIMARY KEY,
     species_id UUID  NOT NULL REFERENCES species (id) ON DELETE CASCADE,
@@ -51,10 +51,10 @@ CREATE TABLE IF NOT EXISTS blacklisted_tokens
 );
 
 -- Indexes
-CREATE INDEX idx_species_scientific_name ON species (species);
-CREATE INDEX idx_species_name ON species (name);
-CREATE INDEX idx_images_species_id ON images (species_id);
-CREATE INDEX idx_points_species_id ON points (species_id);
+CREATE INDEX IF NOT EXISTS idx_species_scientific_name ON species (species);
+CREATE INDEX IF NOT EXISTS idx_species_name ON species (name);
+CREATE INDEX IF NOT EXISTS idx_images_species_id ON images (species_id);
+CREATE INDEX IF NOT EXISTS idx_points_species_id ON points (species_id);
 
 -- Triggers for updating updated_at column
 CREATE OR REPLACE FUNCTION update_updated_at_column()
