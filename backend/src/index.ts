@@ -27,7 +27,7 @@ app.use("/api/species", speciesRouter);
 app.use(errorHandler);
 
 // Serve frontend static files
-app.use(express.static("public/dist"));
+// app.use(express.static("public/dist"));
 
 // Clear blacklist tokens at startup
 await clearBlacklist();

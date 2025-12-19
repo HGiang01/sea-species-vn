@@ -6,6 +6,7 @@
     "scripts": {
         "dev": "tsx watch ./src/index.ts",
         "build": "tsc",
+        "build:all": "npm i && cd ../frontend && npm i && npm run build && cd ../backend && npm run seed:run && npm run build && node ./dist/index.js",
         "seed:run": "tsx ./src/seeders/index.ts run",
         "seed:clear": "tsx ./src/seeders/index.ts clear"
     },
