@@ -83,9 +83,9 @@ function SpeciesPage() {
     return (
         <>
             <Navbar />
-            <div className="flex flex-col w-full h-[calc(100vh-64px)] px-4 pt-4 gap-4">
+            <div className="flex flex-col w-full h-[calc(100vh-64px)] p-4 pt-0 pb-2">
                 {/* Breadcrumbs of taxonomy */}
-                <div className="breadcrumbs text-sm p-0 select-none">
+                <div className="breadcrumbs min-h-fit text-sm p-2">
                     <ul>
                         <li>
                             <Link to="/home">Trang chủ</Link>
@@ -106,42 +106,44 @@ function SpeciesPage() {
                     </ul>
                 </div>
 
-                <div className="flex flex-1 gap-2">
+                <div className="flex flex-1 h-[calc(100%-36px)]">
                     {/* Information */}
-                    <div className="flex flex-[70%] h-[820px] gap-2">
+                    <div className="flex flex-[70%] h-full">
                         <div className="flex flex-col">
                             {/* Images */}
                             <div>
-                                <div className="relative">
+                                <div className="relative select-none">
                                     <img
                                         src={selectedImageUrl!}
                                         alt={species?.scientific_name}
-                                        className="size-[500px] rounded-lg overflow-hidden border-2 border-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.4),0_0_40px_rgba(59,130,246,0.2)]"
+                                        className="size-[500px] rounded-lg overflow-hidden border-2 border-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.4),0_0_40px_rgba(59,130,246,0.2)] select-none pointer-events-none"
+                                        draggable={false}
                                     />
-                                    <div className="absolute top-2 left-2 px-4 py-1 text-lg rounded-full bg-blue-500 text-white">
+                                    <div className="absolute top-2 left-2 px-4 py-1 text-lg rounded-full bg-blue-500 text-white select-none pointer-events-none">
                                         {species?.images.length}
                                     </div>
                                 </div>
-                                <div className="flex justify-start items-center w-[500px] h-28 mt-1 gap-1 overflow-x-auto scrollbar-hide">
+                                <div className="flex justify-start items-center w-[500px] h-26 mt-1 gap-1 overflow-x-auto scrollbar-hide select-none">
                                     {species?.images &&
                                         species.images.map((image) => (
                                             <img
                                                 key={image.public_id}
                                                 src={image.image_url}
                                                 alt={species?.scientific_name}
-                                                className={`inline-block size-24 rounded-lg border-4 ${
+                                                className={`inline-block size-22 rounded-lg border-4 ${
                                                     selectedImageUrl === image.image_url
                                                         ? "border-blue-500"
                                                         : "border-transparent opacity-80 brightness-60 hover:opacity-100 hover:brightness-100"
-                                                } cursor-pointer`}
+                                                } cursor-pointer select-none`}
                                                 onClick={() => selectImage(image.image_url)}
+                                                draggable={false}
                                             />
                                         ))}
                                 </div>
                             </div>
 
                             {/* identification information */}
-                            <div className="flex-1 flex flex-col max-h-[197px] mt-2 px-4 py-2 space-y-2 rounded-lg overflow-hidden border-2 border-slate-300 shadow-lg">
+                            <div className="flex-1 flex flex-col px-4 py-2 rounded-lg overflow-hidden border-2 border-slate-300 shadow-lg">
                                 <div className="flex gap-4">
                                     <div>
                                         <h1 className="text-lg font-semibold">Tình trạng bảo tồn</h1>
@@ -171,10 +173,10 @@ function SpeciesPage() {
                             </div>
                         </div>
 
-                        {/* Name */}
-                        <div className="flex-1 flex flex-col items-center">
-                            <div className="min-h-15 w-full p-4">
-                                <h1 className="text-3xl font-extrabold tracking-tight">
+                        <div className="flex-1 flex flex-col items-center px-4">
+                            {/* Name */}
+                            <div className="w-full">
+                                <h1 className="text-[28px] font-extrabold tracking-tight">
                                     <span className="italic text-slate-800">{parsedScientificName.name}</span>
                                     <span className="ml-2 text-slate-500">{parsedScientificName.author}</span>
                                 </h1>
@@ -182,55 +184,55 @@ function SpeciesPage() {
                                     Tên tiếng Việt: {species?.vietnamese_name || "Chưa có"}
                                 </p>
                             </div>
-                            <div className="flex justify-center items-center flex-wrap gap-1 mt-2">
-                                <div className="w-[390px] h-[290px] px-4 py-2 rounded-lg overflow-hidden border-2 border-slate-300 shadow-lg">
+                            <div className="flex justify-around items-center flex-wrap mt-2">
+                                <div className="w-[385px] h-[290px] mb-2.5 px-4 py-2 rounded-lg overflow-hidden border-2 border-slate-300 shadow-lg">
                                     <div className="flex items-center gap-2">
                                         <ScrollText className="size-6" />
                                         <h1 className="text-xl font-extrabold">Mô tả</h1>
                                     </div>
-                                    <div className="max-h-60 p-2 overflow-y-auto whitespace-pre-line text-justify">
+                                    <div className="max-h-60 p-2 overflow-y-auto whitespace-pre-line text-justify break-words overflow-x-hidden">
                                         {species?.description || "Đang cập nhật..."}
                                     </div>
                                 </div>
 
-                                <div className="w-[390px] h-[290px] px-4 py-2 rounded-lg overflow-hidden border-2 border-slate-300 shadow-lg">
+                                <div className="w-[385px] h-[290px] mb-2.5 px-4 py-2 rounded-lg overflow-hidden border-2 border-slate-300 shadow-lg">
                                     <div className="flex items-center gap-2">
                                         <Fingerprint className="size-6" />
                                         <h1 className="text-xl font-extrabold">Đặc điểm</h1>
                                     </div>
-                                    <div className="max-h-60 p-2 overflow-y-auto whitespace-pre-line text-justify">
+                                    <div className="max-h-60 p-2 overflow-y-auto whitespace-pre-line text-justify break-words overflow-x-hidden">
                                         {species?.characteristic || "Đang cập nhật..."}
                                     </div>
                                 </div>
 
-                                <div className="w-[390px] h-[290px] px-4 py-2 rounded-lg overflow-hidden border-2 border-slate-300 shadow-lg">
+                                <div className="w-[385px] h-[290px] px-4 py-2 rounded-lg overflow-hidden border-2 border-slate-300 shadow-lg">
                                     <div className="flex items-center gap-2">
                                         <MapPinHouse className="size-6" />
                                         <h1 className="text-xl font-extrabold">Nơi sống</h1>
                                     </div>
-                                    <div className="max-h-60 p-2 overflow-y-auto whitespace-pre-line text-justify">
+                                    <div className="max-h-60 p-2 overflow-y-auto whitespace-pre-line text-justify break-words overflow-x-hidden">
                                         {species?.habitas || "Đang cập nhật..."}
                                     </div>
                                 </div>
 
-                                <div className="w-[390px] h-[290px] px-4 py-2 rounded-lg overflow-hidden border-2 border-slate-300 shadow-lg">
+                                <div className="w-[385px] h-[290px] px-4 py-2 rounded-lg overflow-hidden border-2 border-slate-300 shadow-lg">
                                     <div className="flex items-center gap-2">
                                         <Leaf className="size-6" />
                                         <h1 className="text-xl font-extrabold">Vai trò</h1>
                                     </div>
-                                    <div className="max-h-60 p-2 overflow-y-auto whitespace-pre-line text-justify">
+                                    <div className="max-h-60 p-2 overflow-y-auto whitespace-pre-line text-justify break-words overflow-x-hidden">
                                         {species?.impact || "Đang cập nhật..."}
                                     </div>
                                 </div>
                             </div>
 
                             {/* References */}
-                            <div className="h-39 w-[785px] mt-2 px-4 py-2 rounded-lg overflow-hidden border-2 border-slate-300 shadow-lg">
+                            <div className="h-39 w-full max-w-[785px] mt-2 px-4 py-2 rounded-lg overflow-hidden border-2 border-slate-300 shadow-lg">
                                 <div className="flex items-center gap-2">
                                     <BookOpenText className="size-6" />
                                     <h1 className="text-xl font-extrabold">Tài liệu tham khảo</h1>
                                 </div>
-                                <div className="max-h-23 overflow-y-auto whitespace-pre-line text-justify">
+                                <div className="max-h-23 overflow-y-auto whitespace-pre-line text-justify break-words overflow-x-hidden">
                                     {species?.references_text || "Đang cập nhật..."}
                                 </div>
                             </div>
@@ -238,7 +240,7 @@ function SpeciesPage() {
                     </div>
 
                     {/* Distribution */}
-                    <div className="flex-[30%] relative h-[820px] rounded-lg overflow-hidden border-2 border-slate-300 shadow-lg">
+                    <div className="flex-[30%] relative max-h-full rounded-lg overflow-hidden border-2 border-slate-300 shadow-lg">
                         <Map data={species?.points || []} />
 
                         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 collapse collapse-arrow w-[calc(100%-2rem)] bg-base-100 border-base-300 border z-1000">
