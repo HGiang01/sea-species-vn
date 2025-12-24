@@ -184,55 +184,55 @@ function SpeciesPage() {
                                     Tên tiếng Việt: {species?.vietnamese_name || "Chưa có"}
                                 </p>
                             </div>
-                            <div className="flex justify-around items-center flex-wrap mt-2">
-                                <div className="w-[385px] h-[290px] mb-2.5 px-4 py-2 rounded-lg overflow-hidden border-2 border-slate-300 shadow-lg">
+                            <div className="flex-1 grid grid-cols-2 grid-rows-2 gap-2 h-full mt-2">
+                                <div className="px-4 py-2 rounded-lg overflow-hidden border-2 border-slate-300 shadow-lg">
                                     <div className="flex items-center gap-2">
                                         <ScrollText className="size-6" />
                                         <h1 className="text-xl font-extrabold">Mô tả</h1>
                                     </div>
-                                    <div className="max-h-60 p-2 overflow-y-auto whitespace-pre-line text-justify break-words overflow-x-hidden">
+                                    <div className="max-h-60 p-2 overflow-y-auto whitespace-pre-line text-justify wrap-break-word overflow-x-hidden">
                                         {species?.description || "Đang cập nhật..."}
                                     </div>
                                 </div>
 
-                                <div className="w-[385px] h-[290px] mb-2.5 px-4 py-2 rounded-lg overflow-hidden border-2 border-slate-300 shadow-lg">
+                                <div className="px-4 py-2 rounded-lg overflow-hidden border-2 border-slate-300 shadow-lg">
                                     <div className="flex items-center gap-2">
                                         <Fingerprint className="size-6" />
                                         <h1 className="text-xl font-extrabold">Đặc điểm</h1>
                                     </div>
-                                    <div className="max-h-60 p-2 overflow-y-auto whitespace-pre-line text-justify break-words overflow-x-hidden">
+                                    <div className="max-h-60 p-2 overflow-y-auto whitespace-pre-line text-justify wrap-break-word overflow-x-hidden">
                                         {species?.characteristic || "Đang cập nhật..."}
                                     </div>
                                 </div>
 
-                                <div className="w-[385px] h-[290px] px-4 py-2 rounded-lg overflow-hidden border-2 border-slate-300 shadow-lg">
+                                <div className="px-4 py-2 rounded-lg overflow-hidden border-2 border-slate-300 shadow-lg">
                                     <div className="flex items-center gap-2">
                                         <MapPinHouse className="size-6" />
                                         <h1 className="text-xl font-extrabold">Nơi sống</h1>
                                     </div>
-                                    <div className="max-h-60 p-2 overflow-y-auto whitespace-pre-line text-justify break-words overflow-x-hidden">
+                                    <div className="max-h-60 p-2 overflow-y-auto whitespace-pre-line text-justify wrap-break-word overflow-x-hidden">
                                         {species?.habitas || "Đang cập nhật..."}
                                     </div>
                                 </div>
 
-                                <div className="w-[385px] h-[290px] px-4 py-2 rounded-lg overflow-hidden border-2 border-slate-300 shadow-lg">
+                                <div className="px-4 py-2 rounded-lg overflow-hidden border-2 border-slate-300 shadow-lg">
                                     <div className="flex items-center gap-2">
                                         <Leaf className="size-6" />
                                         <h1 className="text-xl font-extrabold">Vai trò</h1>
                                     </div>
-                                    <div className="max-h-60 p-2 overflow-y-auto whitespace-pre-line text-justify break-words overflow-x-hidden">
+                                    <div className="max-h-60 p-2 overflow-y-auto whitespace-pre-line text-justify wrap-break-word overflow-x-hidden">
                                         {species?.impact || "Đang cập nhật..."}
                                     </div>
                                 </div>
                             </div>
 
                             {/* References */}
-                            <div className="h-39 w-full max-w-[785px] mt-2 px-4 py-2 rounded-lg overflow-hidden border-2 border-slate-300 shadow-lg">
+                            <div className="w-full mt-2 px-4 py-2 rounded-lg overflow-hidden border-2 border-slate-300 shadow-lg">
                                 <div className="flex items-center gap-2">
                                     <BookOpenText className="size-6" />
                                     <h1 className="text-xl font-extrabold">Tài liệu tham khảo</h1>
                                 </div>
-                                <div className="max-h-23 overflow-y-auto whitespace-pre-line text-justify break-words overflow-x-hidden">
+                                <div className="max-h-23 overflow-y-auto whitespace-pre-line text-justify wrap-break-word overflow-x-hidden">
                                     {species?.references_text || "Đang cập nhật..."}
                                 </div>
                             </div>

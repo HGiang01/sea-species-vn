@@ -339,18 +339,18 @@ function HomePage() {
                     {speciesList.map((species, index) => (
                         <Link to={`/species/${species.id}`} key={index}>
                             <div
-                                className="relative size-74 rounded-lg overflow-hidden group transition-all duration-300 hover:scale-105 hover:shadow-[0_0_15px_rgba(59,130,246,0.7),0_0_30px_rgba(59,130,246,0.4)]"
+                                className="relative size-50 rounded-lg overflow-hidden group transition-all duration-300 hover:scale-105 hover:shadow-[0_0_15px_rgba(59,130,246,0.7),0_0_30px_rgba(59,130,246,0.4)]"
                                 key={species.id}
                             >
                                 <img src={species.cover_image_url} alt={species.scientific_name} className="w-full h-full" />
                                 <div
-                                    className="absolute bottom-0 w-full h-fit p-2 text-center text-2xl text-white font-semibold
+                                    className="absolute bottom-0 w-full h-fit p-2 text-center text-md text-white font-semibold
                                     bg-linear-to-t from-black/80 via-black/70 to-transparent
                                     opacity-0 group-hover:opacity-100 transition-opacity duration-300"
                                 >
                                     {species.scientific_name}
                                 </div>
-                                <div className="absolute top-2 right-2 flex justify-center items-center px-4 py-1 rounded-full text-white text-sm bg-black/40 backdrop-blur-sm border border-white/25 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                                <div className="absolute top-2 right-2 flex justify-center items-center p-1 rounded-full text-white text-[11px] bg-black/40 backdrop-blur-sm border border-white/25 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                                     <div className="mr-1 tooltip tooltip-bottom" data-tip="Tình trạng bảo tồn">
                                         <Info className="size-3.5" />
                                     </div>
