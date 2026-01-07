@@ -16,7 +16,7 @@ function Navbar() {
             <div className="navbar px-4 bg-base-100 shadow-sm select-none">
                 {/* Logo */}
                 <div className="navbar-start">
-                    <Link to="/home" className="flex items-center text-xl font-semibold">
+                    <Link to="https://sinhvatbienvietnam.zoo.id.vn/trang-ch%E1%BB%A7" className="flex items-center text-xl font-semibold">
                         <img src={logo} alt="Logo Sinh vật Việt Nam" className="size-10" />
                         <p className="ml-2">SINH VẬT BIỂN VIỆT NAM</p>
                     </Link>
@@ -25,12 +25,14 @@ function Navbar() {
                 {/* Menu */}
                 <div className="navbar-end items-center *:py-2 *:px-4 *:text-md *:font-semibold *:hover:bg-base-300 *:rounded-md *:cursor-pointer">
                     <div className="">
-                        <Link to="/home">Trang chủ</Link>
+                        <Link to="/home">CSDL Hình ảnh</Link>
                     </div>
                     <div className={!isAuthenticated ? "pointer-events-none opacity-50 cursor-not-allowed" : ""}>
                         <Link to="/dashboard">Quản lý</Link>
                     </div>
-                    <div onClick={() => informRef.current?.showModal()}>Liên hệ</div>
+                    <Link to="https://sinhvatbienvietnam.zoo.id.vn/li%C3%AAn-h%E1%BB%87">
+                        Liên hệ
+                    </Link>
                     <div className="dropdown dropdown-end">
                         <div tabIndex={0} className="flex justify-center items-center">
                             <p>Tài khoản</p>
